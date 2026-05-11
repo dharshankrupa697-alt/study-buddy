@@ -154,15 +154,15 @@ export default function RoadmapPage() {
       const prompts: Record<string,string> = {
         competitive:`Create a study roadmap for ${user.user_metadata?.name} preparing for ${regenAnswers.exam} with ${regenAnswers.months} months left, studying ${regenAnswers.hours} hours daily. Level: ${regenAnswers.level}. Return JSON with exactly these keys: overview (string summary), weeks (array of max 20 objects with keys: week, phase, focus, tasks array of 4 items, hours), strategy (string). Keep it concise.`,
         academic: (() => {
-          const level    = (goalDetails as any).eduLevel  || ""
-          const stream   = (goalDetails as any).stream    || ""
-          const subject  = (goalDetails as any).subject   || ""
-          const college  = (goalDetails as any).college   || ""
-          const semester = (goalDetails as any).semester  || ""
-          const research = (goalDetails as any).research  || ""
-          const weakness = (goalDetails as any).weakness  || ""
-          const examDate = (goalDetails as any).examDate  || ""
-          const hours    = (goalDetails as any).hours     || "2"
+          const level    = (regenAnswers as any).eduLevel  || ""
+          const stream   = (regenAnswers as any).stream    || ""
+          const subject  = (regenAnswers as any).subject   || ""
+          const college  = (regenAnswers as any).college   || ""
+          const semester = (regenAnswers as any).semester  || ""
+          const research = (regenAnswers as any).research  || ""
+          const weakness = (regenAnswers as any).weakness  || ""
+          const examDate = (regenAnswers as any).examDate  || ""
+          const hours    = (regenAnswers as any).hours     || "2"
           const isSchool = ["6th Standard","7th Standard","8th Standard","9th Standard","10th Standard"].includes(level)
           const isHighSchool = ["11th Standard","12th Standard"].includes(level)
           const isUG = level === "Undergraduate (UG)"
