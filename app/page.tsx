@@ -30,7 +30,7 @@ export default function Dashboard() {
 
   const load = async () => {
     const user = await getUser()
-    if (!user) { setLoading(false); return }
+    if (!user) { window.location.href = "/login"; return }
     setUserName(user.user_metadata?.name?.split(" ")[0] || "there")
 
     const today = getTodayLocal()

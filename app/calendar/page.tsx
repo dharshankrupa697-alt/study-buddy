@@ -76,7 +76,7 @@ export default function CalendarPage() {
 
   const load = async () => {
     const user = await getUser()
-    if (!user) { setLoading(false); return }
+    if (!user) { window.location.href = "/login"; return }
     setUserId(user.id)
 
     const [roadmapData, weekData, progressData, history] = await Promise.all([

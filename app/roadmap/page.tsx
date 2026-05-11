@@ -80,7 +80,7 @@ export default function RoadmapPage() {
   useEffect(() => {
     const load = async () => {
       const user = await getUser()
-      if (!user) { setLoading(false); return }
+      if (!user) { window.location.href = "/login"; return }
       setUserId(user.id)
       const [roadmapData, progressData, weekData] = await Promise.all([
         getRoadmap(user.id),

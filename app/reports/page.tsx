@@ -40,7 +40,7 @@ export default function ReportsPage() {
   useEffect(() => {
     const load = async () => {
       const user = await getUser()
-      if (!user) { setLoading(false); return }
+      if (!user) { window.location.href = "/login"; return }
       const [sessionData, roadmapData, weekData, progressData] = await Promise.all([
         getSessions(user.id, 100),
         getRoadmap(user.id),

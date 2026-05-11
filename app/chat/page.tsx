@@ -30,7 +30,7 @@ export default function ChatPage() {
   useEffect(() => {
     const load = async () => {
       const user = await getUser()
-      if (!user) { setLoadingCtx(false); return }
+      if (!user) { window.location.href = "/login"; return }
       setUserId(user.id)
 
       const [roadmapData, weekData, count] = await Promise.all([

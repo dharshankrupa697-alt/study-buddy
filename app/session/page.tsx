@@ -144,7 +144,7 @@ export default function StudyRoom() {
   useEffect(() => {
     const load = async () => {
       const user = await getUser()
-      if (!user) return
+      if (!user) { window.location.href = "/login"; return }
       const [roadmapData, weekData, progressData] = await Promise.all([
         getRoadmap(user.id), getCurrentWeek(user.id), getProgress(user.id)
       ])
