@@ -9,7 +9,7 @@ const NAV = [
   { href:"/session",    label:"Study",   emoji:"🎯", active_color:"#30d158" },
   { href:"/roadmap",    label:"Plan",    emoji:"🗺️", active_color:"#bf5af2" },
   { href:"/calendar",   label:"Daily",   emoji:"📅", active_color:"#ff9f0a" },
-  { href:"/profile",    label:"More",    emoji:"⚙️", active_color:"#5ac8fa" },
+  { href:"/reports", label:"More", emoji:"⚙️", active_color:"#5ac8fa" },
 ]
 
 const SIDEBAR_NAV = [
