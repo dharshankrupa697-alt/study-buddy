@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -7,21 +7,44 @@ export async function POST(req: NextRequest) {
   try {
     const { messages, system } = await req.json()
 
-    const response = await client.messages.create({
-      model:      "claude-sonnet-4-5",
+    const stream = client.messages.stream({
+      model:      "claude-sonnet-4-6",
       max_tokens: 2048,
       system:     system || "You are StudyBuddy, a helpful AI tutor. Answer questions clearly and encourage the user.",
       messages,
     })
 
-    const reply = response.content[0].type === "text"
-      ? response.content[0].text
-      : "Sorry I could not generate a response."
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            if (
+              chunk.type === "content_block_delta" &&
+              chunk.delta.type === "text_delta"
+            ) {
+              controller.enqueue(new TextEncoder().encode(chunk.delta.text))
+            }
+          }
+          controller.close()
+        } catch (err) {
+          controller.error(err)
+        }
+      },
+    })
 
-    return NextResponse.json({ reply })
+    return new Response(readable, {
+      headers: {
+        "Content-Type":      "text/plain; charset=utf-8",
+        "Cache-Control":     "no-cache",
+        "X-Accel-Buffering": "no",
+      },
+    })
 
   } catch (error: any) {
-    console.error("API Error:", error?.message)
-    return NextResponse.json({ error: error?.message || "Unknown error" }, { status:500 })
+    console.error("Chat API Error:", error?.message)
+    return new Response(
+      JSON.stringify({ error: error?.message || "Unknown error" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    )
   }
 }

@@ -1,19 +1,19 @@
-﻿"use client"
+"use client"
 import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { signOut, getUser, getCurrentWeek, getRoadmap, getSessions, getProgress } from "@/lib/supabase"
 
 const NAV = [
-  { href:"/dashboard",  label:"Home",  emoji:"🏠", active_color:"#0a84ff" },
-  { href:"/session",    label:"Study", emoji:"🎯", active_color:"#30d158" },
-  { href:"/roadmap",    label:"Plan",  emoji:"🗺️", active_color:"#bf5af2" },
-  { href:"/calendar",   label:"Daily", emoji:"📅", active_color:"#ff9f0a" },
-  { href:"/reports",    label:"More",  emoji:"⚙️", active_color:"#5ac8fa" },
+  { href:"/",           label:"Home",    emoji:"🏠", active_color:"#0a84ff" },
+  { href:"/session",    label:"Study",   emoji:"🎯", active_color:"#30d158" },
+  { href:"/roadmap",    label:"Plan",    emoji:"🗺️", active_color:"#bf5af2" },
+  { href:"/calendar",   label:"Daily",   emoji:"📅", active_color:"#ff9f0a" },
+  { href:"/reports", label:"More", emoji:"⚙️", active_color:"#5ac8fa" },
 ]
 
 const SIDEBAR_NAV = [
-  { href:"/dashboard",  label:"Home",       emoji:"🏠", desc:"Dashboard" },
+  { href:"/",           label:"Home",       emoji:"🏠", desc:"Dashboard" },
   { href:"/session",    label:"Study Room", emoji:"🎯", desc:"Focus + AI" },
   { href:"/chat",       label:"AI Tutor",   emoji:"💬", desc:"Ask anything" },
   { href:"/roadmap",    label:"Roadmap",    emoji:"🗺️", desc:"Study plan" },
@@ -64,8 +64,10 @@ function SidebarStats() {
 
   return (
     <div style={{ padding:"12px 12px 0" }}>
+      {/* Week progress ring */}
       <div style={{ background:"var(--bg-elevated)", borderRadius:"var(--radius-md)", padding:"12px", marginBottom:"8px" }}>
         <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
+          {/* Mini ring */}
           <div style={{ position:"relative", width:"44px", height:"44px", flexShrink:0 }}>
             <svg width="44" height="44" viewBox="0 0 44 44">
               <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4"/>
@@ -87,6 +89,7 @@ function SidebarStats() {
         </div>
       </div>
 
+      {/* Quick stats */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px" }}>
         {[
           { label:"Today", value:`${stats.hrs}h`, color:"#30d158" },
@@ -104,9 +107,11 @@ function SidebarStats() {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname()
-  const isAuth = path==="/login"||path==="/signup"||path==="/reset-password"||path==="/"
-  const [userName,    setUserName]    = useState("")
-  const [userInitial, setUserInitial] = useState("S")
+  const isAuth = path==="/login"||path==="/signup"||path==="/reset-password"
+  const [userName,   setUserName]   = useState("")
+  const [userInitial,setUserInitial] = useState("S")
+  const [hasUser,    setHasUser]    = useState(true)
+  const [userLoaded, setUserLoaded] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -115,19 +120,30 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const name = user.user_metadata?.name||user.email||"Student"
         setUserName(name.split(" ")[0])
         setUserInitial(name.charAt(0).toUpperCase())
+        setHasUser(true)
+      } else {
+        setHasUser(false)
       }
+      setUserLoaded(true)
     }
     load()
   }, [])
 
+  // Auth pages — no shell
   if (isAuth) return (
     <div style={{ minHeight:"100vh", background:"var(--bg-base)" }}>{children}</div>
   )
 
+  // Landing page — no shell for guests
+  if (path === "/" && userLoaded && !hasUser) return <>{children}</>
+
+  // Prevent sidebar flash while checking auth on root
+  if (path === "/" && !userLoaded) return null
+
   return (
     <div style={{ display:"flex", minHeight:"100vh", background:"var(--bg-base)" }}>
 
-      {/* Desktop Sidebar */}
+      {/* ── Desktop Sidebar ── */}
       <aside style={{
         width:"220px", flexShrink:0,
         background:"var(--bg-surface)",
@@ -135,17 +151,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         display:"flex", flexDirection:"column",
         position:"fixed", top:0, left:0, bottom:0, zIndex:50,
       }}>
-
         {/* Logo */}
         <div style={{ padding:"20px 16px 14px", borderBottom:"1px solid var(--border)", flexShrink:0 }}>
           <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
             <div style={{
               width:"36px", height:"36px",
-              background:"linear-gradient(135deg,#7c6dfa,#3ecf8e)",
+              background:"var(--accent)",
               borderRadius:"10px",
               display:"flex", alignItems:"center", justifyContent:"center",
               fontSize:"1.1rem", flexShrink:0,
-              boxShadow:"0 4px 12px rgba(124,109,250,0.4)"
+              boxShadow:"0 4px 12px rgba(10,132,255,0.4)"
             }}>🧠</div>
             <div>
               <p style={{ fontWeight:"700", fontSize:"0.95rem", margin:0 }}>StudyBuddy</p>
@@ -207,64 +222,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* ── Main Content ── */}
       <main style={{ marginLeft:"220px", flex:1, minHeight:"100vh", position:"relative" }}>
-
-        {/* Mobile Header — only visible on mobile */}
-        <div className="mobile-header" style={{
-          display:"none", alignItems:"center", justifyContent:"space-between",
-          padding:"12px 16px",
-          background:"var(--bg-surface)",
-          borderBottom:"1px solid var(--border)",
-          position:"sticky", top:0, zIndex:40,
-        }}>
-          {/* Logo */}
-          <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-            <div style={{
-              width:"30px", height:"30px",
-              background:"linear-gradient(135deg,#7c6dfa,#3ecf8e)",
-              borderRadius:"8px",
-              display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:"0.9rem",
-            }}>🧠</div>
-            <span style={{ fontWeight:"700", fontSize:"0.9rem" }}>StudyBuddy</span>
-          </div>
-
-          {/* User + Logout */}
-          <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-            <div style={{ textAlign:"right" }}>
-              <p style={{ fontSize:"0.78rem", fontWeight:"600", margin:0 }}>{userName||"Student"}</p>
-              <p style={{ fontSize:"0.6rem", color:"var(--text-muted)", margin:0 }}>Active</p>
-            </div>
-            <div style={{ width:"30px", height:"30px", borderRadius:"50%", background:"linear-gradient(135deg,var(--accent),var(--green))", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.75rem", fontWeight:"700", color:"white" }}>
-              {userInitial}
-            </div>
-            <button onClick={async()=>{ await signOut(); window.location.href="/login" }} style={{
-              background:"rgba(255,59,48,0.12)", border:"1px solid rgba(255,59,48,0.25)",
-              borderRadius:"8px", color:"#ff3b30",
-              padding:"6px 10px", fontSize:"0.72rem", cursor:"pointer", fontWeight:"600",
-            }}>Log out</button>
-          </div>
-        </div>
-
         {children}
       </main>
 
-      {/* Mobile Bottom Nav */}
-      <style>{`
-        @media (max-width: 768px) {
-          .mobile-header { display: flex !important; }
-          .mobile-nav    { display: flex !important; }
-          aside          { display: none !important; }
-          main           { margin-left: 0 !important; padding-bottom: 80px; }
-        }
-      `}</style>
-
-      <nav className="mobile-nav" style={{
+      {/* ── Mobile Bottom Nav ── */}
+      <nav className="mobile-nav glass" style={{
         position:"fixed", bottom:0, left:0, right:0,
         borderTop:"1px solid var(--border)",
-        padding:"6px 0 24px",
-        background:"var(--bg-surface)",
+        padding:"8px 0 20px",
         zIndex:100, display:"none",
         justifyContent:"space-around", alignItems:"center",
       }}>
@@ -273,18 +240,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           return (
             <Link key={item.href} href={item.href} style={{
               display:"flex", flexDirection:"column", alignItems:"center",
-              gap:"3px", padding:"4px 8px", textDecoration:"none",
-              flex:1, position:"relative", minWidth:0,
+              gap:"3px", padding:"4px 12px", textDecoration:"none",
+              flex:1, position:"relative"
             }}>
               {active && (
                 <div style={{
-                  position:"absolute", top:"-6px", left:"50%", transform:"translateX(-50%)",
-                  width:"28px", height:"2px", borderRadius:"99px",
+                  position:"absolute", top:"-8px", left:"50%", transform:"translateX(-50%)",
+                  width:"32px", height:"3px", borderRadius:"99px",
                   background:item.active_color,
+                  boxShadow:`0 0 8px ${item.active_color}`
                 }}/>
               )}
-              <span style={{ fontSize:"1.2rem", lineHeight:1 }}>{item.emoji}</span>
-              <span style={{ fontSize:"0.58rem", fontWeight:active?"700":"400", color:active?item.active_color:"var(--text-muted)", letterSpacing:"0.2px", whiteSpace:"nowrap" }}>
+              <span style={{ fontSize:"1.3rem", filter:active?"none":"grayscale(0.3)", transition:"all 0.2s" }}>{item.emoji}</span>
+              <span style={{ fontSize:"0.6rem", fontWeight:active?"700":"400", color:active?item.active_color:"var(--text-muted)", letterSpacing:"0.3px" }}>
                 {item.label}
               </span>
             </Link>

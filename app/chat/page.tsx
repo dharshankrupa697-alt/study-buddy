@@ -20,6 +20,7 @@ export default function ChatPage() {
   const [messages,    setMessages]    = useState<Message[]>([])
   const [input,       setInput]       = useState("")
   const [loading,     setLoading]     = useState(false)
+  const [streaming,   setStreaming]   = useState(false)
   const [context,     setContext]     = useState<any>(null)
   const [loadingCtx,  setLoadingCtx]  = useState(true)
   const [userId,      setUserId]      = useState("")
@@ -95,39 +96,72 @@ YOUR ROLE: Answer in context of their ${context.goalType} preparation. Be encour
   }
 
   const sendMessage = async () => {
-    if (!input.trim()||loading||limitHit) return
+    if (!input.trim() || loading || streaming || limitHit) return
 
-    const userMsg: Message = { role:"user", content:input }
-    const updated = [...messages, userMsg]
-    setMessages(updated)
+    const userMsg: Message = { role: "user", content: input }
+    const history = [...messages, userMsg]
+    setMessages(history)
     setInput("")
     setLoading(true)
 
     try {
-      const res  = await fetch("/api/chat", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ messages:updated, system:buildSystem() })
+      const res = await fetch("/api/chat", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ messages: history, system: buildSystem() }),
       })
-      const data = await res.json()
 
-      // Increment count in Supabase
+      if (!res.ok || !res.body) throw new Error("Request failed")
+
+      const reader  = res.body.getReader()
+      const decoder = new TextDecoder()
+      let accumulated = ""
+      let started     = false
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        accumulated += chunk
+
+        if (!started) {
+          started = true
+          setLoading(false)
+          setStreaming(true)
+          setMessages([...history, { role: "assistant", content: accumulated }])
+        } else {
+          setMessages(prev => [
+            ...prev.slice(0, -1),
+            { role: "assistant", content: accumulated },
+          ])
+        }
+      }
+
+      // Stream done — increment count and append suffix
+      setStreaming(false)
       const newCount = await incrementMessageCount(userId)
       setMsgCount(newCount)
       if (newCount >= MSG_LIMIT) setLimitHit(true)
 
       const remaining = MSG_LIMIT - newCount
       const suffix = remaining > 0
-        ? `\n\n_${remaining} free message${remaining!==1?"s":""} remaining._`
+        ? `\n\n_${remaining} free message${remaining !== 1 ? "s" : ""} remaining._`
         : `\n\n_You've used all ${MSG_LIMIT} free messages. Upgrade to Pro for unlimited access!_`
 
-      setMessages([...updated, {
-        role:"assistant",
-        content: data.reply + suffix
-      }])
+      setMessages(prev => [
+        ...prev.slice(0, -1),
+        { role: "assistant", content: accumulated + suffix },
+      ])
+
     } catch {
-      setMessages([...updated, { role:"assistant", content:"Sorry, something went wrong. Please try again!" }])
-    } finally { setLoading(false) }
+      setLoading(false)
+      setStreaming(false)
+      setMessages(prev => [
+        ...prev,
+        { role: "assistant", content: "Sorry, something went wrong. Please try again!" },
+      ])
+    }
   }
 
   const handleKey = (e: React.KeyboardEvent) => {
@@ -215,7 +249,12 @@ YOUR ROLE: Answer in context of their ${context.goalType} preparation. Be encour
                   border:msg.role==="assistant"?"1px solid var(--border)":"none",
                   fontSize:"0.9rem", lineHeight:1.6, color:"var(--text-primary)",
                   animation:"fadeIn 0.2s ease"
-                }} dangerouslySetInnerHTML={{ __html:formatMessage(msg.content) }}/>
+                }}>
+                  <span dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}/>
+                  {streaming && i === messages.length - 1 && msg.role === "assistant" && (
+                    <span style={{ display:"inline-block", width:"2px", height:"1em", background:"var(--text-secondary)", marginLeft:"2px", verticalAlign:"middle", animation:"blink 0.7s step-end infinite" }}/>
+                  )}
+                </div>
                 {msg.role==="user" && (
                   <div style={{ width:"32px", height:"32px", borderRadius:"50%", background:"var(--bg-elevated)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.85rem", flexShrink:0, alignSelf:"flex-end", border:"1px solid var(--border)" }}>👤</div>
                 )}
@@ -286,24 +325,25 @@ YOUR ROLE: Answer in context of their ${context.goalType} preparation. Be encour
         />
         <button
           onClick={sendMessage}
-          disabled={loading||!input.trim()||limitHit}
+          disabled={loading||streaming||!input.trim()||limitHit}
           style={{
             padding:"12px 20px",
-            background:loading||!input.trim()||limitHit?"var(--bg-elevated)":"var(--accent)",
+            background:loading||streaming||!input.trim()||limitHit?"var(--bg-elevated)":"var(--accent)",
             border:"none", borderRadius:"var(--radius-lg)",
-            color:loading||!input.trim()||limitHit?"var(--text-muted)":"white",
+            color:loading||streaming||!input.trim()||limitHit?"var(--text-muted)":"white",
             fontSize:"0.9rem", fontWeight:"600",
-            cursor:loading||!input.trim()||limitHit?"not-allowed":"pointer",
+            cursor:loading||streaming||!input.trim()||limitHit?"not-allowed":"pointer",
             transition:"all 0.2s", flexShrink:0
           }}
         >
-          {loading?"...":"Send →"}
+          {loading?"...":streaming?"...":"Send →"}
         </button>
       </div>
 
       <style>{`
         @keyframes bounce { to { transform:translateY(-4px); opacity:0.5; } }
         @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes blink  { 0%,100%{opacity:1} 50%{opacity:0} }
       `}</style>
     </div>
   )

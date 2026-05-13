@@ -14,6 +14,16 @@ export async function signUp(email: string, password: string, name: string, goal
     password,
     options: { data: { name, goal, daily_hours: dailyHours } }
   })
+
+  // If auth succeeded but profile trigger may have failed, upsert manually
+  if (!error && data.user) {
+    await supabase.from("profiles").upsert({
+      id:    data.user.id,
+      email: email,
+      name:  name,
+    }, { onConflict: "id" })
+  }
+
   return { data, error }
 }
 
