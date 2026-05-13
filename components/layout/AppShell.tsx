@@ -198,7 +198,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <p style={{ fontSize:"0.6rem", color:"var(--text-muted)", margin:0 }}>Active</p>
               </div>
             </div>
-            <button onClick={async()=>{ await signOut(); window.location.href="/login" }} style={{
+            <button onClick={async()=>{ await signOut(); window.location.href="/" }} style={{
               background:"rgba(255,255,255,0.06)", border:"1px solid var(--border)",
               borderRadius:"var(--radius-sm)", color:"var(--text-muted)",
               padding:"4px 8px", fontSize:"0.62rem", cursor:"pointer"
@@ -239,7 +239,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div style={{ width:"30px", height:"30px", borderRadius:"50%", background:"linear-gradient(135deg,var(--accent),var(--green))", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"0.75rem", fontWeight:"700", color:"white" }}>
               {userInitial}
             </div>
-            <button onClick={async()=>{ await signOut(); window.location.href="/login" }} style={{
+            <button onClick={async()=>{ await signOut(); window.location.href="/" }} style={{
               background:"rgba(255,59,48,0.12)", border:"1px solid rgba(255,59,48,0.25)",
               borderRadius:"8px", color:"#ff3b30",
               padding:"6px 10px", fontSize:"0.72rem", cursor:"pointer", fontWeight:"600",

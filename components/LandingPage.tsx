@@ -218,10 +218,16 @@ export default function LandingPage() {
         }
         @media(max-width:640px){
           .nav-links { display:none; }
+          .lp-nav { padding:0 16px; height:56px; }
+          .nav-right { gap:8px; }
+          .btn-ghost { padding:6px 12px; font-size:.78rem; }
+          .btn-pill  { padding:6px 14px; font-size:.78rem; white-space:nowrap; }
           .lp section,.stats-bar,.lp-footer { padding-left:20px;padding-right:20px; }
-          .hero { padding:100px 20px 80px; }
+          .hero { padding:80px 20px 60px; }
           .feat-grid,.weeks,.stats-inner { grid-template-columns:1fr; }
-          .lp h1 { font-size:2.3rem; }
+          .lp h1 { font-size:2.1rem; }
+          .cam-card { width:100% !important; max-width:360px; }
+          .chip-l,.chip-r { display:none !important; }
         }
       `}</style>
 
