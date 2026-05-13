@@ -459,7 +459,7 @@ export default function LandingPage() {
         {/* Footer */}
         <footer className="lp-footer">
           <a href="/" className="logo"><div className="logo-mark">🧠</div>StudyBuddy</a>
-          <p>Built with Claude AI · Focus tracking by MediaPipe · © 2026</p>
+          <p>Built by D.k - AI Focus tracking by MediaPipe · © 2026</p>
         </footer>
       </div>
     </>
