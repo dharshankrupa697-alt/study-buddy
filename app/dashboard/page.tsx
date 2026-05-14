@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react"
 import { getSessions, getUser, getRoadmap, getProgress, getCurrentWeek, getDailyTasks, getDailyCheckin } from "@/lib/supabase"
 import Link from "next/link"
-import LandingPage from "@/components/LandingPage"
 
 function getTodayLocal() {
   const now = new Date()
@@ -149,9 +148,68 @@ function WelcomePopup({ name, streak, quote, onClose }: { name:string; streak:nu
   )
 }
 
+
+const MILESTONES = [3,7,14,30,60,100]
+
+function StreakCard({ streak, best, studiedToday, color }: { streak:number; best:number; studiedToday:boolean; color:string }) {
+  const nextMilestone = MILESTONES.find(m=>m>streak)||MILESTONES[MILESTONES.length-1]
+  const prevMilestone = MILESTONES.filter(m=>m<=streak).pop()||0
+  const pct = nextMilestone===prevMilestone?100:Math.round(((streak-prevMilestone)/(nextMilestone-prevMilestone))*100)
+  const hour = new Date().getHours()
+  const atRisk = !studiedToday && streak>0 && hour>=17
+
+  const badge = streak>=100?"🏆 Legend":streak>=60?"💎 Diamond":streak>=30?"🥇 Gold":streak>=14?"🥈 Silver":streak>=7?"🥉 Bronze":streak>=3?"⭐ Rising":null
+
+  return (
+    <div style={{background:"var(--bg-card)",border:`1px solid ${atRisk?"rgba(255,69,58,0.3)":streak>0?"rgba(255,159,10,0.2)":"var(--border)"}`,borderRadius:"var(--radius-xl)",padding:"1.2rem",marginBottom:"1.2rem",position:"relative",overflow:"hidden"}}>
+      {/* At-risk warning */}
+      {atRisk&&(
+        <div style={{background:"rgba(255,69,58,0.08)",border:"1px solid rgba(255,69,58,0.2)",borderRadius:"var(--radius-md)",padding:"8px 12px",marginBottom:"12px",display:"flex",alignItems:"center",gap:"8px"}}>
+          <span style={{fontSize:"1rem"}}>⚠️</span>
+          <p style={{fontSize:"0.8rem",color:"#ff453a",fontWeight:"600",margin:0}}>Streak at risk! Study today to keep your {streak}-day streak</p>
+        </div>
+      )}
+
+      <div style={{display:"flex",alignItems:"center",gap:"16px"}}>
+        {/* Big fire + count */}
+        <div style={{textAlign:"center",flexShrink:0}}>
+          <div style={{fontSize:"2.5rem",lineHeight:1,marginBottom:"2px"}}>{streak>0?"🔥":"💤"}</div>
+          <p style={{fontSize:"2rem",fontWeight:"800",color:streak>0?"#ff9f0a":"var(--text-muted)",margin:0,lineHeight:1}}>{streak}</p>
+          <p style={{fontSize:"0.62rem",color:"var(--text-muted)",margin:0,fontWeight:"600"}}>DAY{streak!==1?"S":""}</p>
+        </div>
+
+        {/* Progress to next milestone */}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
+            <p style={{fontSize:"0.78rem",fontWeight:"600",margin:0}}>{studiedToday?"✅ Studied today":"📚 Study today!"}</p>
+            {badge&&<span style={{fontSize:"0.68rem",fontWeight:"700",background:"rgba(255,159,10,0.12)",color:"#ff9f0a",border:"1px solid rgba(255,159,10,0.25)",borderRadius:"99px",padding:"2px 8px"}}>{badge}</span>}
+          </div>
+          <div style={{height:"6px",background:"var(--bg-elevated)",borderRadius:"99px",overflow:"hidden",marginBottom:"6px"}}>
+            <div style={{height:"100%",background:"linear-gradient(90deg,#ff9f0a,#ff6b00)",borderRadius:"99px",width:`${pct}%`,transition:"width 1s ease"}}/>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between"}}>
+            <p style={{fontSize:"0.62rem",color:"var(--text-muted)",margin:0}}>{streak<nextMilestone?`${nextMilestone-streak} days to ${nextMilestone}-day milestone`:"🎯 Milestone reached!"}</p>
+            {best>streak&&<p style={{fontSize:"0.62rem",color:"var(--text-muted)",margin:0}}>Best: {best}d</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Milestone dots */}
+      <div style={{display:"flex",gap:"6px",marginTop:"12px",justifyContent:"center"}}>
+        {MILESTONES.map(m=>(
+          <div key={m} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"3px"}}>
+            <div style={{width:"28px",height:"28px",borderRadius:"50%",background:streak>=m?"linear-gradient(135deg,#ff9f0a,#ff6b00)":streak>0&&m===nextMilestone?"rgba(255,159,10,0.15)":"var(--bg-elevated)",border:`1.5px solid ${streak>=m?"#ff9f0a":streak>0&&m===nextMilestone?"rgba(255,159,10,0.4)":"var(--border)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.6rem",fontWeight:"700",color:streak>=m?"white":streak>0&&m===nextMilestone?"#ff9f0a":"var(--text-muted)",transition:"all 0.3s"}}>
+              {streak>=m?"✓":m}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [loading,      setLoading]      = useState(true)
-  const [isGuest,      setIsGuest]      = useState(false) 
   const [showWelcome,  setShowWelcome]  = useState(false)
   const [userName,     setUserName]     = useState("there")
   const [sessions,     setSessions]     = useState(0)
@@ -164,11 +222,13 @@ export default function Dashboard() {
   const [todayTasks,   setTodayTasks]   = useState<any[]>([])
   const [todayCheckin, setTodayCheckin] = useState<any>(null)
   const [streak,       setStreak]       = useState(0)
+  const [bestStreak,   setBestStreak]   = useState(0)
+  const [studiedToday, setStudiedToday] = useState(false)
   const [quote,        setQuote]        = useState("")
 
   const load = async () => {
     const user = await getUser()
-    if (!user) { setIsGuest(true); setLoading(false); return }
+    if (!user) { setLoading(false); return }
     setUserName(user.user_metadata?.name?.split(" ")[0] || "there")
 
     const today = getTodayLocal()
@@ -204,16 +264,31 @@ export default function Dashboard() {
     setTodayTasks(dailyTasks)
     setTodayCheckin(dailyCheckin)
 
-    // Calculate streak from sessions
-    let s=0
-    const now=new Date()
-    for (let i=0;i<30;i++) {
+    // Calculate current streak
+    const toDay=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`
+    const sessDay=(se:any)=>{ const sd=new Date(se.created_at); return toDay(sd) }
+    let s=0, now=new Date()
+    for (let i=0;i<365;i++) {
       const d=new Date(now); d.setDate(d.getDate()-i)
-      const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`
-      if (sess.some((se:any)=>{ const sd=new Date(se.created_at); return `${sd.getFullYear()}-${String(sd.getMonth()+1).padStart(2,"0")}-${String(sd.getDate()).padStart(2,"0")}`===ds })) s++
+      const ds=toDay(d)
+      if (sess.some((se:any)=>sessDay(se)===ds)) s++
       else if (i>0) break
     }
     setStreak(s)
+    // Check if studied today
+    setStudiedToday(sess.some((se:any)=>sessDay(se)===toDay(new Date())))
+    // Calculate best streak
+    const allDays=[...new Set(sess.map((se:any)=>sessDay(se)))].sort() as string[]
+    let best=0, cur=0
+    for (let i=0;i<allDays.length;i++) {
+      if (i===0){cur=1}
+      else {
+        const diff=(new Date(allDays[i]).getTime()-new Date(allDays[i-1]).getTime())/(86400000)
+        cur=diff<=1.5?cur+1:1
+      }
+      best=Math.max(best,cur)
+    }
+    setBestStreak(Math.max(best,s))
     setLoading(false)
 
     // Show welcome popup once per day
@@ -259,7 +334,6 @@ export default function Dashboard() {
       </div>
     </div>
   )
-  if (isGuest) return <LandingPage />
 
   return (
     <>
@@ -303,6 +377,9 @@ export default function Dashboard() {
             <ActivityRing pct={dailyPct} color="#0a84ff" size={90} strokeWidth={8} label="Daily Tasks" value={`${dailyDone}/${dailyTotal}`}/>
           </div>
         </div>
+
+        {/* Streak card */}
+        <StreakCard streak={streak} best={bestStreak} studiedToday={studiedToday} color={color}/>
 
         {/* Today's priority task */}
         <div style={{marginBottom:"1.2rem"}}>
@@ -355,6 +432,11 @@ export default function Dashboard() {
                     <p style={{fontSize:"0.72rem",color:"var(--text-muted)",margin:0}}>{task.description}</p>
                   </div>
                   <span style={{fontSize:"0.72rem",color:"var(--accent)",fontWeight:"600",flexShrink:0}}>{task.hours}h</span>
+                  {!task.completed && (
+                    <Link href={`/session?week=${currentWeek}&task=0`} style={{textDecoration:"none",flexShrink:0}}>
+                      <span style={{fontSize:"0.7rem",fontWeight:"700",color:"white",background:"var(--accent)",borderRadius:"var(--radius-sm)",padding:"4px 10px",display:"block",whiteSpace:"nowrap"}}>Study →</span>
+                    </Link>
+                  )}
                 </div>
               ))}
 
@@ -423,7 +505,7 @@ export default function Dashboard() {
         </div>
 
         {/* Start session CTA */}
-        <Link href="/session" style={{textDecoration:"none",display:"block"}}>
+        <Link href={`/session?week=${currentWeek}&task=0`} style={{textDecoration:"none",display:"block"}}>
           <div style={{
             background:"linear-gradient(135deg,#0a84ff,#30d158)",
             borderRadius:"var(--radius-xl)",

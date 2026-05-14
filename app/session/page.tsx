@@ -1,7 +1,9 @@
 "use client"
 import { useEffect, useRef, useState, useCallback } from "react"
+import dynamic from "next/dynamic"
+const FocusParticles = dynamic(() => import("@/components/FocusParticles"), { ssr:false })
 import { saveSession, getUser, getRoadmap, getCurrentWeek, getProgress, toggleTask } from "@/lib/supabase"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 
 const TECHNIQUES = {
@@ -88,7 +90,16 @@ export default function StudyRoom() {
   const drowsyFrames= useRef(0)
   const blinkFrames = useRef(0)
   const phoneBox    = useRef<any>(null)
-  const router      = useRouter()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+
+  const [showAI,      setShowAI]      = useState(false)
+  const [aiMessages,  setAiMessages]  = useState<{role:string;content:string}[]>([])
+  const [aiInput,     setAiInput]     = useState("")
+  const [aiLoading,   setAiLoading]   = useState(false)
+  const [aiStreaming, setAiStreaming]  = useState(false)
+  const [weekDone,    setWeekDone]    = useState(false)
+  const aiEndRef = useRef<HTMLDivElement>(null)
 
   const [phase,           setPhase]           = useState<Phase>("idle")
   const [loadMsg,         setLoadMsg]         = useState("")
@@ -117,9 +128,12 @@ export default function StudyRoom() {
   const tech  = TECHNIQUES[techKey]
 
   useEffect(() => {
+    // Read URL params from dashboard → session link
+    const wp = searchParams.get("week")
+    const tp = searchParams.get("task")
     const load = async () => {
       const user = await getUser()
-      if (!user) { window.location.href="/login"; return }
+      if (!user) { window.location.href="/dashboard"; return }
       const [roadmapData, weekData, progressData] = await Promise.all([
         getRoadmap(user.id), getCurrentWeek(user.id), getProgress(user.id)
       ])
@@ -128,7 +142,11 @@ export default function StudyRoom() {
         if ((!rm?.weeks||rm.weeks.length===0)&&typeof rm?.overview==="string") {
           try { const p=JSON.parse(rm.overview.replace(/```json\n?/gi,"").replace(/```\n?/g,"").trim()); if(p.weeks?.length>0) rm=p } catch {}
         }
-        setRoadmapWeeks(rm?.weeks||[]); setGoalType(roadmapData.goal_type||""); setSelectedWeek(weekData)
+        setRoadmapWeeks(rm?.weeks||[])
+        setGoalType(roadmapData.goal_type||"")
+        // Use URL param if provided, else default to current week
+        setSelectedWeek(wp ? Number(wp) : weekData)
+        if (tp !== null) setSelectedTask(Number(tp))
       }
       setWeekProgress(progressData)
     }
@@ -229,7 +247,19 @@ export default function StudyRoom() {
       const user=await getUser()
       if (user) {
         await saveSession({user_id:user.id,duration_minutes:report.duration,focus_score:avgScore,distractions:distCount,avg_expression:"neutral",subject:goalType})
-        if (selectedTask!==null&&totalSecs>=300) await toggleTask(user.id,selectedWeek,selectedTask,true)
+        if (selectedTask!==null&&totalSecs>=300) {
+          await toggleTask(user.id,selectedWeek,selectedTask,true)
+          // Check if this completes the whole week
+          const weekTasks = roadmapWeeks.find((w:any)=>(w.week||0)===selectedWeek)?.tasks||[]
+          const updatedProgress = [...weekProgress, {week_number:selectedWeek,task_index:selectedTask,completed:true}]
+          const allDone = weekTasks.length>0 && weekTasks.every((_:any,i:number)=>
+            updatedProgress.some(p=>p.week_number===selectedWeek&&p.task_index===i&&p.completed)
+          )
+          if (allDone) {
+            const existing = await getLastPassedAttempt(user.id, selectedWeek)
+            if (!existing) setWeekDone(true)
+          }
+        }
       }
     } catch(e){console.error(e)}
   }
@@ -423,13 +453,25 @@ export default function StudyRoom() {
             </p>
           </div>
 
+          {/* Week complete — quiz prompt */}
+          {weekDone && (
+            <div style={{background:"linear-gradient(135deg,rgba(48,209,88,0.12),rgba(10,132,255,0.08))",border:"1px solid rgba(48,209,88,0.3)",borderRadius:"var(--radius-xl)",padding:"1.2rem",marginBottom:"1rem",textAlign:"center",animation:"fadeIn 0.5s ease"}}>
+              <p style={{fontSize:"1.5rem",margin:"0 0 6px"}}>🎉</p>
+              <p style={{fontWeight:"700",color:"#30d158",margin:"0 0 4px"}}>Week {selectedWeek} Complete!</p>
+              <p style={{fontSize:"0.8rem",color:"var(--text-muted)",margin:"0 0 14px"}}>All tasks done! Take the quiz to unlock Week {selectedWeek+1}</p>
+              <button onClick={()=>router.push("/roadmap")} style={{width:"100%",padding:"12px",background:"linear-gradient(135deg,#30d158,#0a84ff)",border:"none",borderRadius:"var(--radius-lg)",color:"white",fontWeight:"700",cursor:"pointer",fontSize:"0.9rem"}}>
+                Take Week Quiz 🧠
+              </button>
+            </div>
+          )}
+
           <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-            <button onClick={()=>{ setShowReport(false); setPhase("idle"); setTimerSecs(tech.work*60); setTotalSecs(0); setDistCount(0) }}
+            <button onClick={()=>{ setShowReport(false); setPhase("idle"); setTimerSecs(tech.work*60); setTotalSecs(0); setDistCount(0); setWeekDone(false) }}
               style={{width:"100%",padding:"14px",background:"linear-gradient(135deg,var(--accent),#30d158)",border:"none",borderRadius:"var(--radius-xl)",color:"white",fontWeight:"700",cursor:"pointer",fontSize:"0.95rem",boxShadow:"0 8px 24px rgba(10,132,255,0.3)"}}>
               New Session 🔄
             </button>
             <div style={{display:"flex",gap:"8px"}}>
-              <button onClick={()=>router.push("/")} style={{flex:1,padding:"12px",background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:"var(--radius-xl)",color:"var(--text-secondary)",fontWeight:"600",cursor:"pointer",fontSize:"0.88rem"}}>
+              <button onClick={()=>router.push("/dashboard")} style={{flex:1,padding:"12px",background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:"var(--radius-xl)",color:"var(--text-secondary)",fontWeight:"600",cursor:"pointer",fontSize:"0.88rem"}}>
                 Dashboard 🏠
               </button>
               <button onClick={()=>router.push("/calendar")} style={{flex:1,padding:"12px",background:"rgba(255,159,10,0.1)",border:"1px solid rgba(255,159,10,0.25)",borderRadius:"var(--radius-xl)",color:"#ff9f0a",fontWeight:"600",cursor:"pointer",fontSize:"0.88rem"}}>
@@ -442,12 +484,49 @@ export default function StudyRoom() {
     )
   }
 
+  const sendAI = async () => {
+    if (!aiInput.trim() || aiLoading || aiStreaming) return
+    const userMsg = { role:"user", content:aiInput }
+    const history = [...aiMessages, userMsg]
+    setAiMessages(history)
+    setAiInput("")
+    setAiLoading(true)
+    const taskName = currentWeekTasks[selectedTask??0]?.name || "their studies"
+    try {
+      const res = await fetch("/api/chat", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          messages:history,
+          system:`You are StudyBuddy AI Tutor. The student is in a study session right now working on: "${taskName}". Be concise, helpful and encouraging. Keep answers brief (3-5 sentences max) since they're in the middle of studying.`
+        })
+      })
+      if (!res.ok||!res.body) throw new Error("fail")
+      const reader=res.body.getReader(), decoder=new TextDecoder()
+      let acc="", started=false
+      setAiLoading(false); setAiStreaming(true)
+      while(true){
+        const {done,value}=await reader.read()
+        if(done) break
+        acc+=decoder.decode(value,{stream:true})
+        if(!started){started=true;setAiMessages([...history,{role:"assistant",content:acc}])}
+        else setAiMessages(prev=>[...prev.slice(0,-1),{role:"assistant",content:acc}])
+        if(aiEndRef.current) aiEndRef.current.scrollIntoView({behavior:"smooth"})
+      }
+      setAiStreaming(false)
+    } catch {
+      setAiLoading(false); setAiStreaming(false)
+      setAiMessages(prev=>[...prev,{role:"assistant",content:"Sorry, something went wrong. Please try again!"}])
+    }
+  }
+
+
   return (
     <div style={{minHeight:"100vh",padding:"1.5rem",maxWidth:"500px",margin:"0 auto"}}>
 
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"1.5rem"}}>
-        <Link href="/" style={{color:"var(--text-muted)",textDecoration:"none",fontSize:"1.2rem",lineHeight:1}}>←</Link>
+        <Link href="/dashboard" style={{color:"var(--text-muted)",textDecoration:"none",fontSize:"1.2rem",lineHeight:1}}>←</Link>
         <div style={{flex:1}}>
           <h1 style={{fontSize:"1.2rem",fontWeight:"700",margin:0}}>Study Room</h1>
           <p style={{color:"var(--text-muted)",fontSize:"0.7rem",margin:0}}>MediaPipe AI · Smart focus tracking</p>
@@ -502,8 +581,10 @@ export default function StudyRoom() {
         transition:"border-color 0.5s",
         boxShadow:isRunning?`0 0 30px ${sc(score)}22`:undefined
       }}>
-        <video ref={videoRef} muted playsInline style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",transform:"scaleX(-1)",display:isRunning?"block":"none"}}/>
-        <canvas ref={canvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",display:isRunning?"block":"none"}}/>
+        {/* Three.js focus particle system — sits behind video and face canvas */}
+        <FocusParticles score={score} distracted={!!alertMsg} isRunning={isRunning}/>
+        <video ref={videoRef} muted playsInline style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",transform:"scaleX(-1)",display:isRunning?"block":"none",zIndex:1}}/>
+        <canvas ref={canvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",display:isRunning?"block":"none",zIndex:2}}/>
 
         {!isRunning&&(
           <div style={{textAlign:"center",color:"var(--text-muted)"}}>
@@ -643,6 +724,72 @@ export default function StudyRoom() {
           <button onClick={endSession} style={{flex:1,padding:"14px",background:"#ff453a",border:"none",borderRadius:"var(--radius-xl)",color:"white",cursor:"pointer",fontWeight:"700",fontSize:"0.88rem",boxShadow:"0 4px 16px rgba(255,69,58,0.3)"}}>
             End ✓
           </button>
+        </div>
+      )}
+
+      {/* Floating Ask AI button — visible when session is running */}
+      {isRunning && (
+        <button
+          onClick={()=>{
+            setShowAI(true)
+            if (aiMessages.length===0) {
+              const taskName = currentWeekTasks[selectedTask??0]?.name || "this topic"
+              setAiMessages([{role:"assistant",content:`Hey! I see you're studying **${taskName}**. What do you need help with? 🎯`}])
+            }
+          }}
+          style={{position:"fixed",bottom:"90px",right:"20px",width:"52px",height:"52px",borderRadius:"50%",background:"linear-gradient(135deg,#7c6dfa,#3ecf8e)",border:"none",color:"white",fontSize:"1.3rem",cursor:"pointer",zIndex:90,boxShadow:"0 4px 20px rgba(124,109,250,0.5)",display:"flex",alignItems:"center",justifyContent:"center"}}
+          aria-label="Ask AI tutor"
+        >💬</button>
+      )}
+
+      {/* AI Tutor slide-up panel */}
+      {showAI && (
+        <div style={{position:"fixed",inset:0,zIndex:150,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={e=>{if(e.target===e.currentTarget)setShowAI(false)}}>
+          <div style={{background:"var(--bg-surface)",borderRadius:"var(--radius-2xl) var(--radius-2xl) 0 0",border:"1px solid var(--border)",borderBottom:"none",maxHeight:"75vh",display:"flex",flexDirection:"column",animation:"slideUp 0.3s ease"}}>
+            {/* Handle + header */}
+            <div style={{padding:"12px 20px 0",textAlign:"center",flexShrink:0}}>
+              <div style={{width:"36px",height:"4px",borderRadius:"2px",background:"var(--border)",margin:"0 auto 12px"}}/>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                  <div style={{width:"28px",height:"28px",borderRadius:"50%",background:"linear-gradient(135deg,#7c6dfa,#3ecf8e)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.8rem"}}>🤖</div>
+                  <div>
+                    <p style={{fontWeight:"700",fontSize:"0.88rem",margin:0}}>AI Tutor</p>
+                    <p style={{fontSize:"0.65rem",color:"var(--text-muted)",margin:0}}>Ask anything about your current topic</p>
+                  </div>
+                </div>
+                <button onClick={()=>setShowAI(false)} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",color:"var(--text-muted)",padding:"4px 10px",fontSize:"0.78rem",cursor:"pointer"}}>Done</button>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div style={{flex:1,overflowY:"auto",padding:"16px 20px",display:"flex",flexDirection:"column",gap:"12px",minHeight:0}}>
+              {aiMessages.map((msg,i)=>(
+                <div key={i} style={{display:"flex",gap:"8px",flexDirection:msg.role==="user"?"row-reverse":"row"}}>
+                  {msg.role==="assistant"&&<div style={{width:"24px",height:"24px",borderRadius:"50%",background:"linear-gradient(135deg,#7c6dfa,#3ecf8e)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.7rem",flexShrink:0}}>🤖</div>}
+                  <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:msg.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:msg.role==="user"?"var(--accent)":"var(--bg-elevated)",border:msg.role==="assistant"?"1px solid var(--border)":"none",fontSize:"0.85rem",lineHeight:1.6,color:msg.role==="user"?"white":"var(--text-primary)"}}>
+                    {msg.content}
+                    {aiStreaming && i===aiMessages.length-1 && msg.role==="assistant" && <span style={{borderRight:"2px solid var(--accent)",marginLeft:"2px",animation:"blink 0.7s step-end infinite"}}>&nbsp;</span>}
+                  </div>
+                </div>
+              ))}
+              {aiLoading&&<div style={{display:"flex",gap:"4px",padding:"8px 0"}}>{[0,1,2].map(i=><div key={i} style={{width:"6px",height:"6px",borderRadius:"50%",background:"var(--text-muted)",animation:`bounce 1s ${i*0.15}s ease-in-out infinite`}}/>)}</div>}
+              <div ref={aiEndRef}/>
+            </div>
+
+            {/* Input */}
+            <div style={{padding:"12px 16px 24px",borderTop:"1px solid var(--border)",display:"flex",gap:"10px",flexShrink:0}}>
+              <input
+                value={aiInput}
+                onChange={e=>setAiInput(e.target.value)}
+                onKeyDown={async e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();await sendAI()}}}
+                placeholder="Ask about your current topic..."
+                style={{flex:1,background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:"10px 14px",color:"var(--text-primary)",fontSize:"0.88rem",outline:"none",fontFamily:"inherit"}}
+              />
+              <button onClick={sendAI} disabled={aiLoading||aiStreaming||!aiInput.trim()} style={{padding:"10px 16px",background:aiLoading||aiStreaming||!aiInput.trim()?"var(--bg-elevated)":"var(--accent)",border:"none",borderRadius:"var(--radius-lg)",color:aiLoading||aiStreaming||!aiInput.trim()?"var(--text-muted)":"white",fontWeight:"700",cursor:aiLoading||aiStreaming||!aiInput.trim()?"not-allowed":"pointer",fontSize:"0.88rem",flexShrink:0}}>
+                {aiLoading||aiStreaming?"...":"Send →"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
